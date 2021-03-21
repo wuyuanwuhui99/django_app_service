@@ -61,7 +61,7 @@ class Token(object):
     # 获取token中的user_id
     @staticmethod
     def get_user_id(request):
-        if 'Authorization' is not request.headers or request.headers["Authorization"] is None:
+        if 'Authorization' not in request.headers or request.headers["Authorization"] is None:
             return None
         else:
             data = Token.decode_token(request.headers["Authorization"])
@@ -72,7 +72,7 @@ class Token(object):
     #更新token
     @staticmethod
     def update_token(request):
-        if 'Authorization' is not request.headers or request.headers["Authorization"] is None:
+        if 'Authorization' not in request.headers or request.headers["Authorization"] is None:
             return None
         data = Token.decode_token(request.headers["Authorization"])
         if data:

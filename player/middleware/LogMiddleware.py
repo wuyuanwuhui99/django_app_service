@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 from music.models import Log
 import json
-from player.utils import now,get_app_id
+from player.utils import now,get_app_id,DateEncoder
 from player.jwt_token import Token
 from time import time
+from django.http import JsonResponse
 
 try:
     from django.utils.deprecation import MiddlewareMixin  # Django 1.10.x
@@ -36,7 +37,7 @@ class LogMiddleware(MiddlewareMixin):
 
     def process_response(self, request, response):
         self.log.end_time = now()
-        self.log.result = str(response.content,"utf-8")
+        self.log.result = json.dumps(response,cls=DateEncoder)
         if hasattr(request, "state"):
             description,oparation,method = request.state
             self.log.description = description
@@ -44,4 +45,4 @@ class LogMiddleware(MiddlewareMixin):
             self.log.method = method
         self.log.run_time = int(time()*1000) - self.timer
         self.log.save()
-        return response
+        return JsonResponse(response)

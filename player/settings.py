@@ -73,7 +73,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'player.middleware.TokenMiddleware.TokenMiddleware',
-    'player.middleware.LogMiddleware.LogMiddleware'
+    'player.middleware.LogMiddleware.LogMiddleware',
+    'player.middleware.ResultMiddleware.ResultMiddleware'
 ]
 
 ROOT_URLCONF = 'player.urls'

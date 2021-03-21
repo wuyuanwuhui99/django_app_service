@@ -1,11 +1,10 @@
 from django.http import HttpResponse,JsonResponse
-from django.forms.models import fields_for_model,model_to_dict
 from django.shortcuts import redirect
 from music import models
 from player.jwt_token import Token
-from player.utils import getJsonByList, getJson,now,converToJson
+from player.utils import now,converToJson
 import json
-from player.utils import batch_dict_camel,extend,download
+from player.utils import extend,download
 from player.config import C_HEADERS,U_HEADERS,OPARATION,EXPIRED
 from music.models import User,FavoriteMusic,Douyin,RecordMusic
 import requests #请求模块
@@ -45,16 +44,16 @@ def getDouyinList(request):
     request.state = ("查询抖音歌曲列表",OPARATION["QUERY"],"getDouyinList")
     result = cache.get(request.path)
     if result == None:
-        pass
-        douyinList = models.Douyin.objects.filter(disabled = "0").order_by("-update_time")[:2]
+        douyinList = models.Douyin.objects.filter(disabled = "0").order_by("-update_time")[:10]
         result = res_list_success(douyinList)
         cache.set(request.path,json.dumps(result),EXPIRED)
-        return JsonResponse(result)
-    return JsonResponse(json.loads(result))
+        return result
+    return json.loads(result)
 
 #登录，
 def login(request):
     if (request.method == 'POST'):
+        request.state = ("登录",OPARATION["POST"],"login")
         params = json.loads(request.body)
         res = models.User.objects.filter(user_id=params["userId"],password = params["password"]).first()
         if res == None:
@@ -66,6 +65,7 @@ def login(request):
 #注册用户
 def register(request):
     if (request.method == 'POST'):
+        request.state = ("注册用户", OPARATION["POST"], "register")
         params = json.loads(str(request.body,"utf-8"))
         user = User()
         for key,value in params.items():
@@ -78,7 +78,8 @@ def register(request):
 
 #获取用户信息
 def getUserData(request):
-   if 'Authorization' is not  request.headers or  request.headers["Authorization"] is None:
+   request.state = ("获取用户信息", OPARATION["QUERY"], "getUserData")
+   if 'Authorization' not in request.headers or  request.headers["Authorization"] is None:
         result = models.User.objects.filter(role="public").order_by('?').first()
         return res_dict_success(result)
    else: #有token
@@ -88,10 +89,11 @@ def getUserData(request):
            return res_dict_success(result)
        else: #如果token无效
             result = models.User.objects.filter(role="public").order_by('?').first()
-            return  res_dict_success(result)
+            return res_dict_success(result)
 
 #根据用户id查询该用户收藏的列表
 def getFavorite(request):
+    request.state = ("根据用户id查询该用户收藏的列表", OPARATION["QUERY"], "getFavorite")
     user_id = Token.get_user_id(request)
     result = models.FavoriteMusic.objects.filter(user_id=user_id)
     token = Token.update_token(request)
@@ -100,6 +102,7 @@ def getFavorite(request):
 
 #查询是否收藏该歌曲
 def queryFavorite(request):
+    request.state = ("查询是否收藏该歌曲", OPARATION["QUERY"], "queryFavorite")
     mid = request.GET.get("mid")
     user_id = Token.get_user_id(request)
     if mid != None:
@@ -113,6 +116,7 @@ def queryFavorite(request):
 @transaction.atomic #事务
 def addFavorite(request):
     if (request.method == 'POST'):
+        request.state = ("收藏", OPARATION["ADD"], "addFavorite")
         user_id = Token.get_user_id(request)
         params = json.loads(request.body)#驼峰转下划线
         res = models.FavoriteMusic.objects.filter(user_id=user_id,mid=params["mid"])
@@ -151,6 +155,7 @@ def addFavorite(request):
 @transaction.atomic #事务
 def deleteFavorite(request):
     if (request.method == 'DELETE'):
+        request.state = ("取消收藏", OPARATION["DELETE"], "deleteFavorite")
         user_id = Token.get_user_id(request)
         params = json.loads(request.body)  # 驼峰转下划线
         if "mid" in params:
@@ -165,6 +170,7 @@ def deleteFavorite(request):
 @transaction.atomic #事务
 def record(request):
     if (request.method == 'POST'):
+        request.state = ("歌曲记录", OPARATION["POST"], "addFavorite")
         params = json.loads(request.body) # 驼峰转下划线
         recordMusic = RecordMusic()
         user_id = Token.get_user_id(request)

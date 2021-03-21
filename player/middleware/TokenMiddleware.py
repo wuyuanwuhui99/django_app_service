@@ -15,7 +15,7 @@ class TokenMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         if request.path.find("getway") != -1:
-            if 'Authorization' is not  request.headers or  request.headers["Authorization"] is None:
+            if 'Authorization' not in  request.headers or  request.headers["Authorization"] is None:
                 return HttpResponse(res_fail())
             else:
                 state = Token.verify_bearer_token(request.headers["Authorization"])
