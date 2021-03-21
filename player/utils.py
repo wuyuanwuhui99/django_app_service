@@ -1,6 +1,5 @@
 import json
 from django.core import serializers
-from django.http import JsonResponse
 from django.forms.models import model_to_dict
 import re
 from time import strftime,localtime,time #时间模块
@@ -8,7 +7,9 @@ import datetime
 import os
 import requests
 import json
-from player.config import APP
+from numpy.random import random
+from player.config import APP,C_HEADERS,U_HEADERS,EXPIRED
+from django.core.cache import cache
 
 
 def format(value):
@@ -95,15 +96,15 @@ def getJson(data=None,status="sucess",msg = ""):
         "msg": msg
     }
 
-def res_success(list=None,dict=None,str=None,msg=None,token=None):
+def res_success(list=None,dict=None,data=None,msg=None,token=None):
     result = None
     if list != None:
         list = json.loads(serializers.serialize("json", list))
         result = [item["fields"] for item in list]
     elif dict != None:
         result = model_to_dict(dict)
-    elif str != None:
-        result = str
+    elif data != None:
+        result = data
     return {
         "data": result,
         "status": "SUCCESS",
@@ -111,14 +112,14 @@ def res_success(list=None,dict=None,str=None,msg=None,token=None):
         "token":token
     }
 
-def res_str_success(data,msg=None,token=None):
-    return res_success(str=data,msg=None,token=None)
+def res_data_success(data,msg=None,token=None):
+    return res_success(data=data,msg=msg,token=token)
 
 def res_dict_success(data,msg=None,token=None):
-    return res_success(dict=data,msg=None,token=None)
+    return res_success(dict=data,msg=msg,token=token)
 
 def res_list_success(data,msg=None,token=None):
-    return res_success(list=data,msg=None,token=None)
+    return res_success(list=data,msg=msg,token=token)
 
 def res_fail(data=None,msg=""):
     return {
@@ -189,7 +190,23 @@ class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, bytes):
             return str(obj, encoding='utf-8')
-
         return json.JSONEncoder.default(self, obj)
 
+def get_redis_data(url="",name=None,query_string=""):
+    result = cache.get(url)
+    if result:
+        return json.loads(result)
+    else:
+        headers = C_HEADERS if url.find("c.y.qq.com") != -1 else U_HEADERS
+        res = requests.get(url + query_string, headers=headers)
+        if name != None:
+            result = converToJson(res, name)
+            result = result["data"] if "data" in result else result
+            result = res_data_success(result)
+        else:
+            result = json.loads(res.text)
+            result = result["data"] if "data" in result else result
+            result = res_data_success(result)
+        cache.set(url, json.dumps(result), EXPIRED)
+        return result
 

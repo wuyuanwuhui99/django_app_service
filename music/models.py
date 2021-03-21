@@ -49,7 +49,7 @@ class FavoriteMusic(models.Model):
     other_url = models.CharField(max_length=255)
     local_url = models.CharField(max_length=255)
     disabled = models.CharField(max_length=255)
-    userId = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
     lyric = models.TextField()
     local_image = models.CharField(max_length=255)
 

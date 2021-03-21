@@ -1,20 +1,19 @@
-from django.http import HttpResponse,JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from music import models
 from player.jwt_token import Token
-from player.utils import now,converToJson
+from player.utils import now
 import json
-from player.utils import extend,download
-from player.config import C_HEADERS,U_HEADERS,OPARATION,EXPIRED
+from player.utils import extend,download,get_redis_data
+from player.config import OPARATION,EXPIRED
 from music.models import User,FavoriteMusic,Douyin,RecordMusic
-import requests #请求模块
 from django.db import transaction,connection #事务
 import time
 from music.content_type import CONTENT_TYPE
 import re
 import os
-import random
-from player.utils import res_fail,res_list_success,res_dict_success,res_str_success
+from random import random
+from player.utils import res_fail,res_list_success,res_dict_success,res_data_success
 from django.core.cache import cache
 
 #设置首页
@@ -53,19 +52,19 @@ def getDouyinList(request):
 #登录，
 def login(request):
     if (request.method == 'POST'):
-        request.state = ("登录",OPARATION["POST"],"login")
+        request.state = ("登录",OPARATION["GET"],"login")
         params = json.loads(request.body)
         res = models.User.objects.filter(user_id=params["userId"],password = params["password"]).first()
         if res == None:
             result = res_fail(msg="账号或密码错误",status="fail")
         else:
             result = res_dict_success(res)
-    return JsonResponse(result)
+    return result
 
 #注册用户
 def register(request):
     if (request.method == 'POST'):
-        request.state = ("注册用户", OPARATION["POST"], "register")
+        request.state = ("注册用户", OPARATION["ADD"], "register")
         params = json.loads(str(request.body,"utf-8"))
         user = User()
         for key,value in params.items():
@@ -74,7 +73,7 @@ def register(request):
         user.update_date = now()
         user.save()
         token = Token.encode_token(user)
-    return JsonResponse(res_dict_success(user,msg="注册成功", token=token))
+    return res_dict_success(user,msg="注册成功", token=token)
 
 #获取用户信息
 def getUserData(request):
@@ -97,7 +96,7 @@ def getFavorite(request):
     user_id = Token.get_user_id(request)
     result = models.FavoriteMusic.objects.filter(user_id=user_id)
     token = Token.update_token(request)
-    return JsonResponse(res_list_success(result,token=token))
+    return res_list_success(result,token=token)
 
 
 #查询是否收藏该歌曲
@@ -107,9 +106,9 @@ def queryFavorite(request):
     user_id = Token.get_user_id(request)
     if mid != None:
         result = models.FavoriteMusic.objects.filter(user_id=user_id,mid=mid)
-        return JsonResponse(res_str_success(len(result)))
+        return res_data_success(len(result))
     else:
-        return JsonResponse(res_fail(msg="缺少mid参数"))
+        return res_fail(msg="缺少mid参数")
 
 
 #收藏，如果是管理员账号，添加到抖音歌曲表，并下载图片和歌曲
@@ -121,7 +120,7 @@ def addFavorite(request):
         params = json.loads(request.body)#驼峰转下划线
         res = models.FavoriteMusic.objects.filter(user_id=user_id,mid=params["mid"])
         if len(res) > 0 :#如果已经收过该歌曲，返回错误提示
-            return JsonResponse(res_fail(msg="已经收藏过该歌曲，请勿重复收藏", status="fail"))
+            return res_fail(msg="已经收藏过该歌曲，请勿重复收藏", status="fail")
         favoriteMusic = FavoriteMusic()
         extend(favoriteMusic, params)
         favoriteMusic.user_id = user_id
@@ -149,7 +148,7 @@ def addFavorite(request):
                     }
                 )
                 douyin.save()
-        return JsonResponse(res_str_success(msg="收藏成功", status="success"))
+        return res_data_success(msg="收藏成功", status="success")
 
 
 @transaction.atomic #事务
@@ -161,16 +160,16 @@ def deleteFavorite(request):
         if "mid" in params:
             res = models.FavoriteMusic.objects.filter(user_id=user_id, mid=params["mid"]).delete()
             if res[0] != 0: #res = (1, {'music.FavoriteMusic': 1})
-                return JsonResponse(res_str_success(msg="删除成功"))
+                return res_data_success(msg="删除成功")
             else:
-                return JsonResponse(res_fail(msg="您收藏的歌曲不存在"))
+                return res_fail(msg="您收藏的歌曲不存在")
         else:
-            return JsonResponse(res_fail(msg="缺少mid参数", status="fail"))
+            return res_fail(msg="缺少mid参数", status="fail")
 
 @transaction.atomic #事务
 def record(request):
     if (request.method == 'POST'):
-        request.state = ("歌曲记录", OPARATION["POST"], "addFavorite")
+        request.state = ("歌曲记录", OPARATION["ADD"], "addFavorite")
         params = json.loads(request.body) # 驼峰转下划线
         recordMusic = RecordMusic()
         user_id = Token.get_user_id(request)
@@ -181,60 +180,63 @@ def record(request):
         cursor.fetchall()
         cursor.execute("UPDATE douyin SET url=%s WHERE mid = %s AND (url='' OR url is null) ", (params["url"],params["mid"]))
         cursor.fetchall()
-        return JsonResponse(res_str_success(msg="插入记录成功", status="success"))
+        return res_data_success(None,msg="插入记录成功")
 
 #获取推荐音乐数据
 def getDiscList(request):
-    res = requests.get("https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=json&platform=yqq&hostUin=0&sin=0&ein=29&sortId=5&needNewCode=0&categoryId=10000000&rnd=0.6219561219093992", headers=C_HEADERS)
-    return JsonResponse(json.loads(res.text))
+    url = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=json&platform=yqq&hostUin=0&sin=0&ein=29&sortId=5&needNewCode=0&categoryId=10000000"
+    return get_redis_data(url=url, query_string="&rnd=" + str(random()))
 
 def getLyric(request):
-    res = requests.get("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=json&songmid="+request.GET["songmid"]+"&platform=yqq&hostUin=0&needNewCode=0&categoryId=10000000&pcachetime="+str(time.time()),headers=C_HEADERS)
-    return JsonResponse(json.loads(res.text))
+    url = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=json&songmid="+request.GET["songmid"]+"&platform=yqq&hostUin=0&needNewCode=0&categoryId=10000000";
+    return get_redis_data(url=url, query_string="&pcachetime=" + str(int(time.time()*1000)))
 
 def getSingerList(request):
-    res = requests.get("https://c.y.qq.com/v8/fcg-bin/v8.fcg?jsonpCallback=getSingerList&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&channel=singer&page=list&key=all_all_all&pagesize=100&pagenum=1&hostUin=0&needNewCode=0&platform=yqq",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getSingerList"))
+    url = "https://c.y.qq.com/v8/fcg-bin/v8.fcg?jsonpCallback=getSingerList&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&channel=singer&page=list&key=all_all_all&pagesize=100&pagenum=1&hostUin=0&needNewCode=0&platform=yqq"
+    return get_redis_data(url=url, name="getSingerList")
 
 def getHotKey(request):
-    res = requests.get("https://c.y.qq.com/splcloud/fcgi-bin/gethotkey.fcg?jsonpCallback=getHotKey&uin=0&needNewCode=1&platform=h5&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getHotKey"))
+    url = "https://c.y.qq.com/splcloud/fcgi-bin/gethotkey.fcg?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&uin=0&needNewCode=1&platform=h5&jsonpCallback=getHotKey"
+    return get_redis_data(url=url, name="getHotKey")
 
 def search(request):
     w = request.GET["w"]
-    res = requests.get("https://c.y.qq.com/soso/fcgi-bin/client_search_cp?jsonpCallback=search&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&ct=24&qqmusic_ver=1298&new_json=1&remoteplace=txt.yqq.center&searchid=37276201631470540&t=0&aggr=1&cr=1&catZhida=1&lossless=0&flag_qc=0&p=1&n=20&w="+w+"&loginUin=0&hostUin=0&platform=yqq&needNewCode=1",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"search"))
+    catZhida = request.GET["catZhida"]
+    p = request.GET["p"]
+    n = request.GET["n"]
+    url = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&ct=24&qqmusic_ver=1298&new_json=1&remoteplace=txt.yqq.center&searchid=37276201631470540&t=0&aggr=1&cr=1&lossless=0&flag_qc=0&loginUin=0&hostUin=0&platform=yqq&needNewCode=1&jsonpCallback=search&catZhida="+catZhida+"&p="+p+"&n="+n+"&w="+w
+    return get_redis_data(url=url, name="search")
 
 def getSingerDetail(request):
-    singermid = request.GET["keyword"]
-    res = requests.get("https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_track_cp.fcg?jsonpCallback=getSingerDetail&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&hostUin=0&needNewCode=0&platform=yqq&order=listen&begin=0&num=80&songstatus=1&singermid="+singermid,headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getSingerDetail"))
+    singermid = request.GET["singermid"]
+    url = "https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_track_cp.fcg?jsonpCallback=getSingerDetail&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&hostUin=0&needNewCode=0&platform=yqq&order=listen&begin=0&num=80&songstatus=1&singermid=" + singermid
+    return get_redis_data(url=url, name="getSingerDetail")
 
 def getRecommend(request):
-    res = requests.get("https://c.y.qq.com/musichall/fcgi-bin/fcg_yqqhomepagerecommend.fcg?jsonpCallback=getRecommend&g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&platform=h5&uin=0&needNewCode=1",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getRecommend"))
+    url = "https://u.y.qq.com/cgi-bin/musics.fcg?-=recom29349756051626663&g_tk=5381&sign=zzadg8hsrunooakff15c4441255ee9ef959d8dacccc3f88&loginUin=0&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0&data=%7B%22comm%22%3A%7B%22ct%22%3A24%7D%2C%22category%22%3A%7B%22method%22%3A%22get_hot_category%22%2C%22param%22%3A%7B%22qq%22%3A%22%22%7D%2C%22module%22%3A%22music.web_category_svr%22%7D%2C%22recomPlaylist%22%3A%7B%22method%22%3A%22get_hot_recommend%22%2C%22param%22%3A%7B%22async%22%3A1%2C%22cmd%22%3A2%7D%2C%22module%22%3A%22playlist.HotRecommendServer%22%7D%2C%22playlist%22%3A%7B%22method%22%3A%22get_playlist_by_category%22%2C%22param%22%3A%7B%22id%22%3A8%2C%22curPage%22%3A1%2C%22size%22%3A40%2C%22order%22%3A5%2C%22titleid%22%3A8%7D%2C%22module%22%3A%22playlist.PlayListPlazaServer%22%7D%2C%22new_song%22%3A%7B%22module%22%3A%22newsong.NewSongServer%22%2C%22method%22%3A%22get_new_song_info%22%2C%22param%22%3A%7B%22type%22%3A5%7D%7D%2C%22new_album%22%3A%7B%22module%22%3A%22newalbum.NewAlbumServer%22%2C%22method%22%3A%22get_new_album_info%22%2C%22param%22%3A%7B%22area%22%3A1%2C%22sin%22%3A0%2C%22num%22%3A20%7D%7D%2C%22new_album_tag%22%3A%7B%22module%22%3A%22newalbum.NewAlbumServer%22%2C%22method%22%3A%22get_new_album_area%22%2C%22param%22%3A%7B%7D%7D%2C%22toplist%22%3A%7B%22module%22%3A%22musicToplist.ToplistInfoServer%22%2C%22method%22%3A%22GetAll%22%2C%22param%22%3A%7B%7D%7D%2C%22focus%22%3A%7B%22module%22%3A%22music.musicHall.MusicHallPlatform%22%2C%22method%22%3A%22GetFocus%22%2C%22param%22%3A%7B%7D%7D%7D"
+    return get_redis_data(url=url, name="getRecommend")
 
 def getSongList(request):
-    res = requests.get("https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?jsonpCallback=getSongList&type=1&json=1&utf8=1&onlysong=0&disstid="+disstid+"&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getSongList"))
+    disstid = request.GET["disstid"]
+    url = "https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?g_tk=5381&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&type=1&json=1&utf8=1&onlysong=0&disstid="+disstid+"&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&jsonpCallback=getSongList"
+    return get_redis_data(url=url, name="getSongList")
 
 def getTopList(request):
-    res = requests.get("https://c.y.qq.com/v8/fcg-bin/fcg_myqq_toplist.fcg?jsonpCallback=getTopList&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&uin=0&needNewCode=1&platform=h5",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getTopList"))
+    url = "https://c.y.qq.com/v8/fcg-bin/fcg_myqq_toplist.fcg?jsonpCallback=getTopList&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&uin=0&needNewCode=1&platform=h5"
+    return get_redis_data(url=url, name="getTopList")
 
 def getMusicList(request):
     topid = request.GET["topid"]
-    res = requests.get("https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?jsonpCallback=getTopList&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&topid="+topid+"&needNewCode=1&uin=0&tpl=3&page=detail&type=top&platform=h5&needNewCode=1",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getMusicList"))
+    url = "https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?jsonpCallback=getMusicList&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&topid=" + topid + "&needNewCode=1&uin=0&tpl=3&page=detail&type=top&platform=h5&needNewCode=1"
+    return get_redis_data(url=url, name="getMusicList")
 
 def getAudioUrl(request):
-    songmid = request.GET["songmid"]
+    songmid = request.GET["mid"]
     filename = request.GET["filename"]
-    res = requests.get("https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg?jsonpCallback=getAudioUrl&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&cid=205361747&uin=0&songmid="+songmid+"&filename="+filename+"&guid=3397254710",headers=C_HEADERS)
-    return JsonResponse(converToJson(res,"getAudioUrl"))
+    url = "https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg?jsonpCallback=getAudioUrl&g_tk=5381&loginUin=0&hostUin=0&platform=yqq&needNewCode=0&inCharset=utf-8&outCharset=utf-8&notice=0&format=jsonp&cid=205361747&uin=0&songmid=" + songmid + "&filename=" + filename + "&guid=3397254710";
+    return get_redis_data(url=url, name="getAudioUrl")
 
 def getSingleSong(request):
-    mid = request.GET["mid"]
-    res = requests.get("https://u.y.qq.com/cgi-bin/musicu.fcg?-=getplaysongvkey"+str(random.randint(0,1000000000000))+"&g_tk=5381&loginUin=275018723&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0&data=%7B%22req%22:%7B%22module%22:%22CDN.SrfCdnDispatchServer%22,%22method%22:%22GetCdnDispatch%22,%22param%22:%7B%22guid%22:%222807659112%22,%22calltype%22:0,%22userip%22:%22%22%7D%7D,%22req_0%22:%7B%22module%22:%22vkey.GetVkeyServer%22,%22method%22:%22CgiGetVkey%22,%22param%22:%7B%22guid%22:%222807659112%22,%22songmid%22:[%22"+mid+"%22],%22songtype%22:[0],%22uin%22:%22275018723%22,%22loginflag%22:1,%22platform%22:%2220%22%7D%7D,%22comm%22:%7B%22uin%22:275018723,%22format%22:%22json%22,%22ct%22:24,%22cv%22:0%7D%7D&jsonpCallback=getSingleSong",headers=C_HEADERS)
-    print(res)
-    return JsonResponse(converToJson(res,"getSingleSong"))
+    songmid = request.GET["songmid"]
+    url = "https://u.y.qq.com/cgi-bin/musicu.fcg?jsonpCallback=getSingleSong&g_tk=5381&loginUin=275018723&hostUin=0&format=json&inCharset=utf8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0&data=%7B%22req%22:%7B%22module%22:%22CDN.SrfCdnDispatchServer%22,%22method%22:%22GetCdnDispatch%22,%22param%22:%7B%22guid%22:%222807659112%22,%22calltype%22:0,%22userip%22:%22%22%7D%7D,%22req_0%22:%7B%22module%22:%22vkey.GetVkeyServer%22,%22method%22:%22CgiGetVkey%22,%22param%22:%7B%22guid%22:%222807659112%22,%22songmid%22:[%22" + songmid + "%22],%22songtype%22:[0],%22uin%22:%22275018723%22,%22loginflag%22:1,%22platform%22:%2220%22%7D%7D,%22comm%22:%7B%22uin%22:275018723,%22format%22:%22json%22,%22ct%22:24,%22cv%22:0%7D%7D"
+    return get_redis_data(url=url,name="getSingleSong",query_string="&-=getplaysongvkey"+ str(random()))
