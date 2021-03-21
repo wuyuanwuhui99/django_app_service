@@ -30,29 +30,9 @@ class Douyin(models.Model):
         verbose_name = '抖音'  # 在admin站点中显示的名称
         verbose_name_plural = verbose_name  # 显示的复数名称
 
-    def resultMap(self):
-        return {
-            "id":"id",
-            "albummid":"albummid",
-            "duration":"duration",
-            "image":"image",
-            "mid":"mid",
-            "name":"name",
-            "singer":"singer",
-            "url":"url",
-            "create_time":"createTime",
-            "timer":"timer",
-            "update_time":"updateTime",
-            "kugou_url":"kugouUrl",
-            "play_mode":"playMode",
-            "other_url":"otherUrl",
-            "local_url":"localUrl",
-            "disabled":"disabled",
-            "lyric":"lyric",
-            "local_image":"localImage"
-        }
 
 class FavoriteMusic(models.Model):
+    t_id = models.AutoField(primary_key=True)
     id = models.IntegerField()
     albummid = models.CharField(max_length = 255)
     duration = models.IntegerField()
@@ -66,41 +46,19 @@ class FavoriteMusic(models.Model):
     update_time = models.DateTimeField()
     kugou_url = models.CharField(max_length=255)
     play_mode =  models.CharField(max_length=255)
-    otherUrl = models.CharField(max_length=255)
-    localUrl = models.CharField(max_length=255)
+    other_url = models.CharField(max_length=255)
+    local_url = models.CharField(max_length=255)
     disabled = models.CharField(max_length=255)
     userId = models.CharField(max_length=255)
     lyric = models.TextField()
-    localImage = models.CharField(max_length=255)
-    favoriteMusicId = models.AutoField(primary_key=True)
+    local_image = models.CharField(max_length=255)
 
     class Meta:
         db_table = 'favorite_music'  # 指明数据库表名
         verbose_name = '收藏音乐表'  # 在admin站点中显示的名称
         verbose_name_plural = verbose_name  # 显示的复数名称
 
-    def resultMap(self):
-        return {
-            "id":"id",
-            "albummid":"albummid",
-            "duration":"duration",
-            "image":"image",
-            "mid":"mid",
-            "name":"name",
-            "singer":"singer",
-            "url":"url",
-            "create_time":"createTime",
-            "timer":"timer",
-            "update_time":"updateTime",
-            "kugou_url":"kugouUrl",
-            "play_mode":"playMode",
-            "other_url":"otherUrl",
-            "local_url":"localUrl",
-            "disabled":"disabled",
-            "user_id":"userId",
-            "lyric":"lyric",
-            "local_image":"localImage"
-        }
+
 
 class RecordMusic(models.Model):
     record_id =  models.AutoField(primary_key=True)
@@ -121,53 +79,46 @@ class RecordMusic(models.Model):
         verbose_name = '记录音乐表'  # 在admin站点中显示的名称
         verbose_name_plural = verbose_name  # 显示的复数名称
 
-    def items(self):
-        return ['id', 'albummid', 'duration', 'image',"mid","name","singer","url","user_id","create_time","timer"]
-
-    def resultMap(self):
-        return {
-            "id":"id",
-            "albummid":"albummid",
-            "duration":"duration",
-            "image":"image",
-            "mid":"mid",
-            "name":"mid",
-            "singer":"singer",
-            "url":"url",
-            "user_id":"userId",
-            "create_time":"createTime",
-            "timer":"timer"
-        }
 
 class User(models.Model):
     user_id = models.CharField(primary_key=True,max_length=255)
-    password = models.CharField(max_length = 255)
+    password = models.CharField(max_length=255)
     create_date = models.DateTimeField()
     update_date = models.DateTimeField()
     username = models.CharField(max_length = 255)
     telephone = models.CharField(max_length = 255)
     email = models.CharField(max_length = 255)
     avater = models.CharField(max_length = 255)
-    age = models.IntegerField()
+    birthday = models.CharField(max_length = 255)
     sex = models.CharField(max_length = 255)
     role = models.CharField(max_length = 255)
-    secret_key = models.CharField(max_length = 255)
 
     class Meta:
         db_table = 'user'  # 指明数据库表名
         verbose_name = '用户表'  # 在admin站点中显示的名称
         verbose_name_plural = verbose_name  # 显示的复数名称
 
-    def resultMap(self):
-        return {
-            "user_id":"user_id",
-            "create_date":"createDate",
-            "update_date":"updateDate",
-            "username":"username",
-            "telephone":"telephone",
-            "email":"email",
-            "avater":"avater",
-            "age":"age",
-            "sex":"sex",
-            "role":"role",
-        }
+class Log(models.Model):
+    id = models.AutoField(primary_key=True)
+    method = models.CharField(max_length = 255)
+    url = models.CharField(max_length = 255)
+    headers = models.TextField()
+    ip = models.CharField(max_length = 255)
+    params = models.TextField()
+    query_string = models.TextField()
+    result = models.TextField()
+    start_time = models.DateTimeField()
+    run_time = models.IntegerField()
+    description = models.CharField(max_length = 255)
+    end_time = models.DateTimeField()
+    oparation = models.CharField(max_length = 255)
+    type = models.CharField(max_length = 255)
+    user_id = models.CharField(max_length = 255)
+    app_id = models.CharField(max_length = 255)
+    app_name = models.CharField(max_length = 255)
+
+    class Meta:
+        db_table = 'log'  # 指明数据库表名
+        verbose_name = '日志'  # 在admin站点中显示的名称
+        verbose_name_plural = verbose_name  # 显示的复数名称
+

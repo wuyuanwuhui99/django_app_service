@@ -1,11 +1,15 @@
 import json
 from django.core import serializers
+from django.http import JsonResponse
+from django.forms.models import model_to_dict
 import re
-from time import sleep,strftime,localtime,time #时间模块
+from time import strftime,localtime,time #时间模块
 import datetime
 import os
 import requests
 import json
+from player.config import APP
+
 
 def format(value):
     if isinstance(value, datetime.datetime):
@@ -15,6 +19,16 @@ def format(value):
     else:
         return value
 
+def now():
+    return strftime('%Y-%m-%d %H:%M:%S', localtime(time()))
+
+def get_time_stamp():
+    ct = time()
+    local_time = localtime(ct)
+    data_head = strftime("%Y-%m-%d %H:%M:%S", local_time)
+    data_secs = (ct - int(ct)) * 1000
+    time_stamp = "%s.%03d" % (data_head, data_secs)
+    print(time_stamp)
 
 #数据库字段名批量转化为驼峰格式
 def camel(s):
@@ -81,6 +95,38 @@ def getJson(data=None,status="sucess",msg = ""):
         "msg": msg
     }
 
+def res_success(list=None,dict=None,str=None,msg=None,token=None):
+    result = None
+    if list != None:
+        list = json.loads(serializers.serialize("json", list))
+        result = [item["fields"] for item in list]
+    elif dict != None:
+        result = model_to_dict(dict)
+    elif str != None:
+        result = str
+    return {
+        "data": result,
+        "status": "SUCCESS",
+        "msg": msg,
+        "token":token
+    }
+
+def res_str_success(data,msg=None,token=None):
+    return res_success(str=data,msg=None,token=None)
+
+def res_dict_success(data,msg=None,token=None):
+    return res_success(dict=data,msg=None,token=None)
+
+def res_list_success(data,msg=None,token=None):
+    return res_success(list=data,msg=None,token=None)
+
+def res_fail(data=None,msg=""):
+    return {
+        "data": data,
+        "status": "FAIL",
+        "msg": msg
+    }
+
 #把源对象属性值赋值给目标对象,如果attrs为空，这把整个source所有属性赋值给target
 #include表示要添加的属性
 #exclude表示排除的属性
@@ -113,12 +159,17 @@ def download(name,path, url,ext="m4a"):
 def now():
     return strftime('%Y-%m-%d %H:%M:%S', localtime(time()))
 
-headers =  {
-    "referer":'https://c.y.qq.com/',
-    "host": 'c.y.qq.com',
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
-}
-
 #把jsonp数据替换掉方法名，并转换成json格式
 def converToJson(res,name):
     return json.loads(re.sub(name+"\\(|\\)$", " ", res.text))
+
+def get_app_id(path):
+    if path.find("/music") != -1:
+        return APP["music"]
+    elif path.find("/movie") != -1:
+        return APP["movie"]
+    elif path.find("/learn") != -1:
+        return APP["learn"]
+    elif path.find("/ebook") != -1:
+        return APP["ebook"]
+

@@ -72,6 +72,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'player.middleware.TokenMiddleware.TokenMiddleware',
+    'player.middleware.LogMiddleware.LogMiddleware'
 ]
 
 ROOT_URLCONF = 'player.urls'
@@ -101,12 +103,26 @@ WSGI_APPLICATION = 'player.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',    # 数据库引擎
-        'NAME': 'music', # 数据库名称
+        'NAME': 'play', # 数据库名称
         'HOST': '127.0.0.1', # 数据库地址，本机 ip 地址 127.0.0.1
         'PORT': 3306, # 端口
         'USER': 'root',  # 数据库用户名
-        'PASSWORD': 'wwq_2020', # 数据库密码
+        'PASSWORD': 'wwq_2021', # 数据库密码
         'OPTIONS': {'isolation_level': None}
+    }
+}
+
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+            # "PASSWORD": "密码",
+            "DECODE_RESPONSES": True
+        }
     }
 }
 
