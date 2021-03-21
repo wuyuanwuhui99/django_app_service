@@ -44,5 +44,8 @@ class LogMiddleware(MiddlewareMixin):
             self.log.oparation = oparation
             self.log.method = method
         self.log.run_time = int(time()*1000) - self.timer
-        self.log.save()
+        try:
+            self.log.save()
+        except Exception as e:
+            print(e)
         return JsonResponse(response)
